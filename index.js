@@ -1,5 +1,6 @@
 var util = require('util');
 var cassandra = require('cassandra-driver');
+var consistencies = cassandra.types.consistencies;
 var Base = require('db-migrate-base');
 var Promise = require('bluebird');
 var moment = require('moment');
@@ -221,11 +222,11 @@ exports.connect = function(config, intern, callback) {
   internals = intern;
   log = internals.mod.log;
   // Make sure the keyspace is defined
-  if(config.database === undefined) {
+  if (config.keyspace === undefined) {
     throw new Error('keyspace must be defined in database.json');
   }
 
-  if(config.host === undefined) {
+  if (config.host === undefined) {
     host = 'localhost';
   } else {
     host = config.host;
@@ -233,22 +234,27 @@ exports.connect = function(config, intern, callback) {
 
   // Cassandra driver expects host to be an array. Allow for comma separated
   // host lists, too.
-  if (host.constructor !== Array) {
+  if (!Array.isArray(host)) {
     host = host.split(",")
   }
 
-  // TODO: See if we need connectionParam or can directly be driven from cofig
+  // TODO: See if we need connectionParam or can directly be driven from config
   var connectionParam = {}
-  if(config.user !== undefined && config.password !== undefined) {
+  if (config.user !== undefined && config.password !== undefined) {
     connectionParam.user = config.user,
     connectionParam.password = config.password
   }
   connectionParam.hostname = host;
-  connectionParam.keyspace = config.database;
+  connectionParam.keyspace = config.keyspace;
+
+  if (config.queryOptions && typeof config.queryOptions.consistency === 'string') {
+    config.queryOptions.consistency = consistencies[config.queryOptions.consistency];
+  }
 
   db = config.db || new cassandra.Client({
     contactPoints: connectionParam.hostname,
-    keyspace: connectionParam.keyspace
+    keyspace: connectionParam.keyspace,
+    queryOptions: config.queryOptions
   });
 
   callback(null, new CqlshDriver(db, connectionParam));
